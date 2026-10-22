@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import CoreMotion
 
 @main
 struct ArmLinkApp: App {
@@ -7,11 +8,12 @@ struct ArmLinkApp: App {
 }
 
 @MainActor
-final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate {
+final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     static let siteURL = URL(string: "https://arduino-arm-3d-viewer.freshauk74.chatgpt.site/")!
     let webView: WKWebView
     @Published var loading = true
     @Published var errorMessage: String?
+    private let motion = CMMotionManager()
 
     override init() {
         let configuration = WKWebViewConfiguration()
@@ -19,6 +21,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
+        webView.configuration.userContentController.add(self, name: "armMotion")
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.isOpaque = false
@@ -41,8 +44,38 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         webView.load(URLRequest(url: url))
     }
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        stopMotion()
         loading = true; errorMessage = nil
     }
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.name == "armMotion", message.frameInfo.securityOrigin.host == Self.siteURL.host,
+              let body = message.body as? [String: String], let action = body["action"] else { return }
+        if action == "start" { startMotion() }
+        if action == "stop" { stopMotion() }
+    }
+    private func startMotion() {
+        guard motion.isDeviceMotionAvailable else {
+            webView.evaluateJavaScript("window.armMotion?.error('此 iPhone 無法提供動作感測器資料')")
+            return
+        }
+        motion.stopDeviceMotionUpdates()
+        motion.deviceMotionUpdateInterval = 1.0 / 25.0
+        motion.startDeviceMotionUpdates(to: .main) { [weak self] sample, error in
+            guard let self else { return }
+            if error != nil {
+                self.stopMotion()
+                self.webView.evaluateJavaScript("window.armMotion?.error('無法讀取動作感測器')")
+                return
+            }
+            guard let attitude = sample?.attitude else { return }
+            let yaw = attitude.yaw * 180 / Double.pi
+            let pitch = attitude.pitch * 180 / Double.pi
+            let roll = attitude.roll * 180 / Double.pi
+            guard yaw.isFinite, pitch.isFinite, roll.isFinite else { return }
+            self.webView.evaluateJavaScript("window.armMotion?.receive({yaw:\(yaw),pitch:\(pitch),roll:\(roll)})")
+        }
+    }
+    func stopMotion() { motion.stopDeviceMotionUpdates() }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loading = false }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { handle(error) }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { handle(error) }
@@ -77,6 +110,7 @@ struct ArmBrowser: UIViewRepresentable {
 
 struct ControllerView: View {
     @StateObject private var model = BrowserModel()
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showingHelp = false
     var body: some View {
         VStack(spacing: 0) {
@@ -114,6 +148,7 @@ struct ControllerView: View {
                         Text("1. 在 App 與電腦網站登入同一個 ChatGPT 帳號。")
                         Text("2. 兩邊保持開啟並連上網路，調整任一關節即可同步。")
                         Text("3. 儲存多個姿態後按播放，兩邊會依相同時間軸執行。")
+                        Text("啟用手機傾斜後，轉動手機控制底座、肩部和肘部；其餘關節用 + / − 按鈕微調。可按重新校準將目前姿勢設為中心。")
                         Text("同步約每 0.5 秒檢查一次，實際延遲取決於網路。切回 App 後會重新取得最新狀態。")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
@@ -138,6 +173,9 @@ struct ControllerView: View {
                 .navigationTitle("使用說明")
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingHelp = false } } }
             }
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase != .active { model.stopMotion() }
         }
     }
 }
