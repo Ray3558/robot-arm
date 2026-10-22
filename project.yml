@@ -8,8 +8,8 @@ settings:
     SWIFT_VERSION: '5.0'
     TARGETED_DEVICE_FAMILY: '1'
     CODE_SIGNING_ALLOWED: NO
-    MARKETING_VERSION: '0.5.0'
-    CURRENT_PROJECT_VERSION: '5'
+    MARKETING_VERSION: '0.5.1'
+    CURRENT_PROJECT_VERSION: '6'
 targets:
   CodexIsland:
     type: application

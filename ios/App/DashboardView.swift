@@ -142,10 +142,13 @@ struct DashboardView: View {
             TimelineView(.periodic(from: .now, by: 30)) { context in
                 let stale = model.updatedAt.map { context.date.timeIntervalSince($0) > 180 } ?? true
                 HStack {
-                    QuotaPieChart(remaining: stale ? nil : primary?.remaining, color: model.textColor)
+                    QuotaPieChart(remaining: primary?.remaining, color: model.textColor)
                         .frame(width: 24, height: 24)
                     Spacer()
-                    Text(stale ? "—" : primary.map { "\($0.remaining)%" } ?? "—")
+                    if stale && primary != nil {
+                        Text("待更新").font(.caption2).foregroundStyle(.orange)
+                    }
+                    Text(primary.map { "\($0.remaining)%" } ?? "—")
                         .font(.system(size: 18, weight: .semibold, design: .rounded)).monospacedDigit()
                 }
                 .foregroundStyle(model.textColor).padding(.horizontal, 23).frame(height: 56)
@@ -193,7 +196,7 @@ struct DashboardView: View {
             Image(systemName: "info.circle").foregroundStyle(model.textColor)
             VStack(alignment: .leading, spacing: 6) {
                 Text(model.status).font(.system(size: 12)).foregroundStyle(.white.opacity(0.8))
-                Text("背景更新由 iOS 調度，可能延遲。超過 3 分鐘未更新，靈動島顯示 —。")
+                Text("背景更新由 iOS 調度，可能延遲。超過 3 分鐘會保留上次額度並標示待更新；回到 App 自動更新，已開啟的靈動島若結束也會自動恢復。")
                     .font(.system(size: 11)).foregroundStyle(Surface.muted)
             }.frame(maxWidth: .infinity, alignment: .leading)
         }.padding(16).background(.white.opacity(0.025), in: RoundedRectangle(cornerRadius: 18))
@@ -311,7 +314,7 @@ private struct IslandSettingsView: View {
                     Link(destination: URL(string: "https://chatgpt.com/codex/settings/usage")!) {
                         Label("查看官方用量頁面", systemImage: "safari")
                     }
-                    HStack { Text("版本"); Spacer(); Text("0.5.0").foregroundStyle(.secondary) }
+                    HStack { Text("版本"); Spacer(); Text("0.5.1").foregroundStyle(.secondary) }
                     Label("憑證僅儲存於本機 Keychain", systemImage: "lock.shield")
                 } header: { Text("關於") } footer: {
                     Text("個人用實驗整合。Codex 服務介面或帳號限制可能影響登入及用量讀取。")

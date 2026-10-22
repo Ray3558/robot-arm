@@ -13,6 +13,7 @@ final class Model: ObservableObject {
     @Published var updatedAt: Date?
     @Published var busy = false
     @Published var signingIn = false
+    private var islandEnabled = UserDefaults.standard.bool(forKey: "islandEnabled")
     private var loginTask: Task<Void, Never>?
     private var sessionID = UUID()
     @Published private(set) var textColorHex = QuotaAppearance.normalized(UserDefaults.standard.string(forKey: "quotaTextColor"))
@@ -53,7 +54,15 @@ final class Model: ObservableObject {
             }
         }
     }
-    init() { Task { connected = await DirectOAuth.shared.connected() } }
+    init() {
+        // Migrate existing activities when upgrading from versions without this preference.
+        if !Activity<QuotaAttributes>.activities.isEmpty { setIslandEnabled(true) }
+        Task { connected = await DirectOAuth.shared.connected() }
+    }
+    private func setIslandEnabled(_ enabled: Bool) {
+        islandEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: "islandEnabled")
+    }
     func startLogin() {
         guard !signingIn else { return }
         signingIn = true
@@ -99,11 +108,16 @@ final class Model: ObservableObject {
                 secondaryRemaining: result.rateLimit?.secondaryWindow?.remaining,
                 resetAt: primary.resetAt, updatedAt: Date().timeIntervalSince1970, textColorHex: textColorHex)
             let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(180))
-            var activities = Activity<QuotaAttributes>.activities
-            if start && activities.isEmpty {
+            var activities = Activity<QuotaAttributes>.activities.filter {
+                $0.activityState == .active || $0.activityState == .stale
+            }
+            // Only create activities while the app is in the foreground.
+            // An explicit stop clears the saved intent, so polling cannot restart it.
+            if (start || islandEnabled) && activities.isEmpty && UIApplication.shared.applicationState == .active {
                 guard ActivityAuthorizationInfo().areActivitiesEnabled else { throw QuotaError.message("請在 iPhone 設定允許即時動態。") }
                 activities = [try Activity.request(attributes: QuotaAttributes(label: "Codex"), content: content, pushType: nil)]
             }
+            if start && !activities.isEmpty { setIslandEnabled(true) }
             for activity in activities { await activity.update(content) }
             status = "已直接從 Codex 更新額度。"
         } catch is CancellationError { }
@@ -115,6 +129,7 @@ final class Model: ObservableObject {
         }
     }
     func stop() async {
+        setIslandEnabled(false)
         for a in Activity<QuotaAttributes>.activities { await a.end(nil, dismissalPolicy: .immediate) }
         status = "已停止靈動島。"
     }
