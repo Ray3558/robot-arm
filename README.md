@@ -1,4 +1,4 @@
-# Codex Island 0.2 — iPhone 直接 OAuth 登入
+# Codex Island 0.3 — 自訂字體顏色與自動更新
 
 iPhone 直接以 ChatGPT / Codex 裝置碼 OAuth 登入，讀取額度並顯示在靈動島。不需要 Mac、橋接伺服器或 OpenAI API Key。最低 iOS 16.2；需要支援靈動島的 iPhone。
 
@@ -24,7 +24,8 @@ Actions 只負責編譯，沒有接收你的 OAuth 登入資料或 Apple 憑證�
 
 - 帳號、裝置碼開關、網路限制與服務介面變更，都可能讓登入或額度讀取失敗。實際 OAuth 授權需由使用者在手機上驗證；編譯成功不代表已完成帳號端測試。
 - 顯示 ChatGPT 帳號的 Codex 額度，而非 API key 餘額。只讀取用量，不發送模型推論請求或消耗 reset credits。
-- 前景每 60 秒更新；也可按「立即更新」。
+- App 提供「字體顏色」ColorPicker，可選任意不透明 RGB 顏色、預覽與恢復薄荷綠。套用至 App 額度、靈動島及鎖定畫面文字；設定會保留，修改時不需網路或重新登入，並保留最後額度更新時間／過期時間。
+- 前景可選每 15／30／60 秒檢查（預設 15 秒），切回 App 時也會檢查；也可按「立即更新」。連線失敗時採 60／120／240／300 秒退避，避免反覆請求。不提供 Codex 額度變動事件或瞬時背景更新的保證。
 - 背景只向 iOS 申請 BGAppRefresh，最早請求時間為約 15 分鐘後。是否執行及執行時間由系統決定，無法保證定時或即時更新；低耗電模式／背景重新整理關閉時可能不會執行。
 - 無 APNs 伺服器，因此不能承諾切到其他 App 後持續刷新。超過 3 分鐘的資料在小島顯示 —；開啟 App 可更新。
 - 即時動態有系統存續時限，結束後需重新開始。
@@ -60,3 +61,4 @@ https://github.com/openai/codex/blob/main/codex-rs/login/src/auth/manager.rs
 https://github.com/openai/codex/blob/main/codex-rs/backend-client/src/client/rate_limit_resets.rs
 
 登入使用公開原始碼中的 Codex public OAuth client ID（不是 client secret）。回應碼／格式取自上述實作，但 OpenAI 仍可能拒絕第三方手機客戶端，請勿將此實驗版宣稱為官方支援的整合。
+

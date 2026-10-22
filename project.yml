@@ -8,8 +8,8 @@ settings:
     SWIFT_VERSION: '5.0'
     TARGETED_DEVICE_FAMILY: '1'
     CODE_SIGNING_ALLOWED: NO
-    MARKETING_VERSION: '0.2.0'
-    CURRENT_PROJECT_VERSION: '2'
+    MARKETING_VERSION: '0.3.0'
+    CURRENT_PROJECT_VERSION: '3'
 targets:
   CodexIsland:
     type: application
@@ -51,3 +51,4 @@ targets:
         CFBundleDisplayName: Codex Quota
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+
