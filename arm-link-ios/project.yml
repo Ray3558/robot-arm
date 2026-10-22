@@ -6,8 +6,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: '5.0'
-    MARKETING_VERSION: '1.1.0'
-    CURRENT_PROJECT_VERSION: '2'
+    MARKETING_VERSION: '1.2.0'
+    CURRENT_PROJECT_VERSION: '3'
     CODE_SIGNING_ALLOWED: NO
     TARGETED_DEVICE_FAMILY: '1,2'
 targets:
@@ -20,7 +20,6 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.yangk1nghh.ArmLink
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: ARM Link
-        INFOPLIST_KEY_NSMotionUsageDescription: 使用手機傾斜控制機械手臂的虛擬關節。
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.education
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
