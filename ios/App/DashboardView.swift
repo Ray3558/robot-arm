@@ -142,7 +142,8 @@ struct DashboardView: View {
             TimelineView(.periodic(from: .now, by: 30)) { context in
                 let stale = model.updatedAt.map { context.date.timeIntervalSince($0) > 180 } ?? true
                 HStack {
-                    Image(systemName: "terminal.fill").font(.system(size: 18, weight: .semibold))
+                    QuotaPieChart(remaining: stale ? nil : primary?.remaining, color: model.textColor)
+                        .frame(width: 24, height: 24)
                     Spacer()
                     Text(stale ? "—" : primary.map { "\($0.remaining)%" } ?? "—")
                         .font(.system(size: 18, weight: .semibold, design: .rounded)).monospacedDigit()
@@ -310,7 +311,7 @@ private struct IslandSettingsView: View {
                     Link(destination: URL(string: "https://chatgpt.com/codex/settings/usage")!) {
                         Label("查看官方用量頁面", systemImage: "safari")
                     }
-                    HStack { Text("版本"); Spacer(); Text("0.4.0").foregroundStyle(.secondary) }
+                    HStack { Text("版本"); Spacer(); Text("0.5.0").foregroundStyle(.secondary) }
                     Label("憑證僅儲存於本機 Keychain", systemImage: "lock.shield")
                 } header: { Text("關於") } footer: {
                     Text("個人用實驗整合。Codex 服務介面或帳號限制可能影響登入及用量讀取。")

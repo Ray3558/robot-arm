@@ -2,49 +2,78 @@ import ActivityKit
 import SwiftUI
 import WidgetKit
 
+private struct PieSummary: View {
+    let title: String
+    let remaining: Int?
+    let color: Color
+    var body: some View {
+        HStack(spacing: 10) {
+            QuotaPieChart(remaining: remaining, color: color).frame(width: 44, height: 44)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.caption).foregroundStyle(color.opacity(0.8))
+                Text(remaining.map { "\($0)%" } ?? "—")
+                    .font(.system(size: 22, weight: .semibold, design: .rounded)).monospacedDigit()
+                    .foregroundStyle(color)
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 struct QuotaWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: QuotaAttributes.self) { context in
-            VStack(alignment: .leading, spacing: 8) {
-                Text(context.attributes.label).font(.headline).foregroundStyle(QuotaAppearance.color(context.state.textColorHex))
-                HStack {
-                    Text("剩餘 \(context.state.remaining)%").font(.title2.bold()).foregroundStyle(QuotaAppearance.color(context.state.textColorHex))
-                    Spacer()
+            let color = QuotaAppearance.color(context.state.textColorHex)
+            VStack(alignment: .leading, spacing: 12) {
+                Text(context.attributes.label).font(.headline).foregroundStyle(color)
+                HStack(spacing: 16) {
+                    PieSummary(title: "主視窗", remaining: context.isStale ? nil : context.state.remaining, color: color)
                     if let secondary = context.state.secondaryRemaining {
-                        Text("第二視窗 \(secondary)%").foregroundStyle(QuotaAppearance.color(context.state.textColorHex))
+                        PieSummary(title: "第二視窗", remaining: context.isStale ? nil : secondary, color: color)
                     }
                 }
-                ProgressView(value: Double(context.state.remaining), total: 100).tint(QuotaAppearance.color(context.state.textColorHex))
-                Text(context.isStale ? "資料已過期，請開啟 App 更新" : "更新於 \(Date(timeIntervalSince1970: context.state.updatedAt).formatted(date: .omitted, time: .shortened))")
-                    .font(.caption).foregroundStyle(QuotaAppearance.color(context.state.textColorHex))
-            }.padding().activityBackgroundTint(.black).activitySystemActionForegroundColor(QuotaAppearance.color(context.state.textColorHex))
+                Text(context.isStale ? "資料已過期，請開啟 App 更新" :
+                    "更新於 \(Date(timeIntervalSince1970: context.state.updatedAt).formatted(date: .omitted, time: .shortened))")
+                    .font(.caption).foregroundStyle(color.opacity(0.8))
+            }.padding().activityBackgroundTint(.black).activitySystemActionForegroundColor(color)
         } dynamicIsland: { context in
-            DynamicIsland {
+            let color = QuotaAppearance.color(context.state.textColorHex)
+            return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Text(context.attributes.label).font(.headline).foregroundStyle(QuotaAppearance.color(context.state.textColorHex))
+                    Text(context.attributes.label).font(.headline).foregroundStyle(color)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(context.isStale ? "—" : "\(context.state.remaining)%").font(.title2.bold()).foregroundStyle(QuotaAppearance.color(context.state.textColorHex))
+                    Image(systemName: "chart.pie.fill").font(.headline).foregroundStyle(color)
+                        .accessibilityHidden(true)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(alignment: .leading) {
-                        if let secondary = context.state.secondaryRemaining {
-                            Text("第二視窗剩餘 \(secondary)%")
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 16) {
+                            PieSummary(title: "主視窗", remaining: context.isStale ? nil : context.state.remaining, color: color)
+                            if let secondary = context.state.secondaryRemaining {
+                                PieSummary(title: "第二視窗", remaining: context.isStale ? nil : secondary, color: color)
+                            }
                         }
                         if let reset = context.state.resetAt {
-                            Text("主視窗重置：\(Date(timeIntervalSince1970: reset).formatted(date: .abbreviated, time: .shortened))")
+                            HStack(spacing: 4) {
+                                Text("主視窗重置")
+                                Text(Date(timeIntervalSince1970: reset), format: .dateTime.month().day().hour().minute())
+                            }.font(.caption2).foregroundStyle(color.opacity(0.8)).lineLimit(2)
                         }
-                        Text(context.isStale ? "資料已過期，點此更新" : "點此開啟 App 更新").font(.caption)
-                    }.foregroundStyle(QuotaAppearance.color(context.state.textColorHex))
+                        Text(context.isStale ? "資料待更新 · 點此開啟 App" : "彩色代表剩餘 · 點此更新")
+                            .font(.caption2).foregroundStyle(color.opacity(0.7))
+                    }.padding(.top, 4)
                 }
             } compactLeading: {
-                Image(systemName: "terminal.fill").foregroundStyle(QuotaAppearance.color(context.state.textColorHex))
+                QuotaPieChart(remaining: context.isStale ? nil : context.state.remaining, color: color)
+                    .frame(width: 20, height: 20)
             } compactTrailing: {
-                Text(context.isStale ? "—" : "\(context.state.remaining)%").monospacedDigit().foregroundStyle(QuotaAppearance.color(context.state.textColorHex))
+                Text(context.isStale ? "—" : "\(context.state.remaining)%")
+                    .monospacedDigit().foregroundStyle(color)
             } minimal: {
-                Text(context.isStale ? "—" : "\(context.state.remaining)").font(.caption).foregroundStyle(QuotaAppearance.color(context.state.textColorHex))
+                QuotaPieChart(remaining: context.isStale ? nil : context.state.remaining, color: color)
+                    .frame(width: 20, height: 20)
             }
-            .keylineTint(QuotaAppearance.color(context.state.textColorHex))
+            .keylineTint(color)
         }
     }
 }
@@ -53,4 +82,3 @@ struct QuotaWidget: Widget {
 struct QuotaWidgetBundle: WidgetBundle {
     var body: some Widget { QuotaWidget() }
 }
-
