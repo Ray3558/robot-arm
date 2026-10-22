@@ -1,102 +1,62 @@
-# Codex Island — iPhone 靈動島額度顯示
+# Codex Island 0.2 — iPhone 直接 OAuth 登入
 
-第一版原始碼。iPhone 16 Pro 可用；最低 iOS 16.2。
-包含 GitHub Actions 未簽署 IPA 編譯、SwiftUI App、Live Activity 擴充套件、Python 額度橋接服務及選配 APNs 更新。
+iPhone 直接以 ChatGPT / Codex 裝置碼 OAuth 登入，讀取額度並顯示在靈動島。不需要 Mac、橋接伺服器或 OpenAI API Key。最低 iOS 16.2；需要支援靈動島的 iPhone。
 
-## 目前驗證狀態
+## 下載與安裝
 
-- Python 語法、額度轉換、JSON-RPC 初始化／額度讀取的模擬整合測試，以及 HTTP 驗證／示範資料路徑已在 Linux 驗證。
-- 此環境沒有 Xcode，尚未實際編譯 Swift、執行 GitHub Actions 或用你的帳號／iPhone 驗證。第一次 Actions 執行會驗證 Apple 編譯器相容性。
-- 沒有讀取你的帳號、建立 GitHub repository 或上傳 Apple／OpenAI 憑證。
+GitHub Actions → 最新成功的 Build unsigned IPA → Artifacts → CodexIsland-unsigned-IPA。解壓取得 IPA，以自己的側載工具重新簽署並安裝；主 App 與 QuotaWidget.appex 都必須保留並簽署。
 
-## 1. 用 GitHub Actions 取得 IPA
+Actions 只負責編譯，沒有接收你的 OAuth 登入資料或 Apple 憑證。未簽署 IPA 不能直接安裝。
 
-1. 建立 GitHub repository，將此資料夾的「內容」放到 repository 根目錄，包含 `.github/workflows/build-ipa.yml`。不要多包一層 CodexIsland。
-2. 將程式推送至 `main`；或在 Actions → Build unsigned IPA → Run workflow 手動啟動（workflow 需先存在預設分支）。
-3. 完成後到該次執行的 Artifacts 下載 `CodexIsland-unsigned-IPA`，解開取得 `CodexIsland-unsigned.ipa`。
-4. 使用你自己的側載／簽名工具重新簽署並安裝。**未簽署 IPA 無法直接點開安裝**。必須同時簽署主 App 與 `PlugIns/QuotaWidget.appex`，不要移除擴充套件。
-5. 若簽名工具變更 bundle ID，主 App 與 extension 必須維持正確父子 ID 關係。推播用的 APNS_BUNDLE_ID 也要對應簽名後主 App ID。
+## 手機登入步驟
 
-編譯不需要 Apple ID、Apple 憑證或 GitHub Secrets。GitHub 的 macOS runner 額度／費用依你的帳號與 repository 設定而定。
-這份 workflow 只產出未簽署 IPA，不提供自動簽名或 TestFlight 發布。
+1. 打開 App，按「登入 ChatGPT」。
+2. 複製 App 剛產生的一次性登入碼。
+3. 按「開啟官方授權頁面」，在 https://auth.openai.com/codex/device 登入並輸入該碼。
+4. 完成授權後切回 App，等待登入與額度讀取完成。
+5. 按「開始顯示靈動島」。
 
-iPhone 上若透過網頁上傳檔案看不到 `.github`，可在 GitHub 建立檔案並將路徑輸入 `.github/workflows/build-ipa.yml`，貼上本包 workflow 內容。其他檔案須保留原本資料夾結構。
+登入碼約 15 分鐘有效。若伺服器要求開啟 device-code login，請在 ChatGPT 安全性設定開啟對應的 Codex 裝置碼登入選項後重試。不會要求在本 App 輸入密碼；授權在官方網站完成。只有使用者主動開始的登入碼應被授權。
 
-## 2. 在 Mac 啟動額度橋接服務
+## 支援與限制
 
-需要 Python 3.10+ 與已安裝的 Codex CLI。使用同一個 ChatGPT 帳號：
+這是個人用實驗整合：Swift 原生實作參照 OpenAI Codex 的裝置碼流程與額度 API，沒有在 iOS 執行 Codex CLI。它不是 OpenAI 官方 App，也不是聲稱具有穩定支援的第三方 iOS OAuth API。
 
-```sh
-codex login
-python3 mac/bridge.py --host 0.0.0.0
-```
+- 帳號、裝置碼開關、網路限制與服務介面變更，都可能讓登入或額度讀取失敗。實際 OAuth 授權需由使用者在手機上驗證；編譯成功不代表已完成帳號端測試。
+- 顯示 ChatGPT 帳號的 Codex 額度，而非 API key 餘額。只讀取用量，不發送模型推論請求或消耗 reset credits。
+- 前景每 60 秒更新；也可按「立即更新」。
+- 背景只向 iOS 申請 BGAppRefresh，最早請求時間為約 15 分鐘後。是否執行及執行時間由系統決定，無法保證定時或即時更新；低耗電模式／背景重新整理關閉時可能不會執行。
+- 無 APNs 伺服器，因此不能承諾切到其他 App 後持續刷新。超過 3 分鐘的資料在小島顯示 —；開啟 App 可更新。
+- 即時動態有系統存續時限，結束後需重新開始。
+- BGTask 允許的識別碼隨 bundle ID 生成。側載工具若修改 bundle ID，亦須對應調整 Info.plist 的 BGTaskSchedulerPermittedIdentifiers，否則背景重新整理無法運作；前景更新仍可用。
 
-若找不到 codex，可用 `--codex /完整路徑/codex` 指定。程式每 60 秒透過 `codex app-server` 的 `account/rateLimits/read` 讀取真實額度。不建立對話、不執行模型任務，也不呼叫付費推論 API。Codex 登入憑證留在執行服務的電腦。
+## 憑證處理
 
-第一次執行會建立 `mac/.bridge-token`，權限僅限檔案擁有者讀寫。將內容貼到 iPhone App 的「連線金鑰」；這是本工具產生的配對密鑰，不是 OpenAI API key。iPhone 會存到 Keychain。
+access token 與 refresh token 只保存在該 iPhone 的 Keychain（ThisDeviceOnly），不寫進 GitHub、日誌或一般設定。網路只使用固定的 OpenAI HTTPS 網域，沒有可填入的中介伺服器。
 
-在 Mac 系統設定找到 Wi-Fi IP；iPhone 與 Mac 使用同一私人網路時，App 網址填 `http://192.168.x.x:8765`，依實際 IP 修改。允許 iPhone 的「本機網路」權限與 Mac 防火牆的 Python 連入。
+刷新憑證會保留輪替後的 refresh token；同一時間只執行一次憑證更新。過期或不支援的授權會顯示錯誤，不會捏造額度。
 
-預設不加 `--host` 時只監聽本機。`--host 0.0.0.0` 才允許其他裝置連入。HTTP 配對金鑰沒有傳輸加密，只適合可信任的家用網路或已加密的私人 VPN。不要把 8765 直接轉發到公網；跨網路請使用自己的 VPN 或帶 HTTPS 的受控反向代理，並讓 App 填對應網址。
+JWT 內容只解碼作為 expiry／workspace routing 提示，不把未驗證 claims 當作已驗證身分。實際存取權由 OpenAI HTTPS 伺服器驗證 access token。
 
-只想看介面、還沒登入 Codex 時：
+「登出」移除手機本機憑證並停止即時動態；不是撤銷所有其他裝置的登入。若要撤銷帳號端存取，請使用 OpenAI 帳號的官方安全性／存取管理設定。
 
-```sh
-python3 mac/bridge.py --host 0.0.0.0 --demo
-```
+## 編譯
 
-此模式在 App 和靈動島都標示「示範」，75% 為固定假資料。正式使用請停止程式，移除 `--demo` 後重開。
+GitHub Actions 使用 macos-15 runner、XcodeGen 與 xcodebuild 建立未簽署 IPA，包含 Live Activity extension。
 
-## 3. iPhone 使用
+- `ios/App/DirectOAuth.swift`：裝置碼、token 交換、Keychain、額度 HTTPS 請求。
+- `ios/App/CodexIslandApp.swift`：帳號介面、ActivityKit、前景與系統排程的背景更新。
+- `ios/Shared/QuotaData.swift`：直接額度 API 解碼與有效範圍驗證。
+- `ios/Widget/QuotaWidget.swift`：靈動島、鎖定畫面與資料逾期呈現。
+- `tests/QuotaData/main.swift`：解碼、空視窗與錯誤資料測試；Actions 用 Swift 執行後再編譯 App。
+- `mac/`：保留 0.1 版橋接程式供參考，0.2 App 完全不使用。
 
-填入網址與金鑰 → 關閉「Apple 推播更新」→ 按「開始顯示靈動島」。
+## 來源核對
 
-- 小島顯示主視窗剩餘百分比；長按可看第二視窗（若有）與主視窗重置時間。
-- 視窗長度取自官方回傳值，沒有固定假設 5 小時／一週；「剩餘百分比」也不代表可精確換算的訊息數。
-- App 前景每 60 秒讀取，也可按「立即更新」。背景沒有 APNs 時不會持續輪詢；靈動島只保留最後資料，3 分鐘後標示逾期「—」，點開 App 可更新。
-- 資料讀取失敗時不會顯示假的 100%。
-- iOS 會限制即時動態的存續時間與背景更新頻率；這不是永久常駐的系統狀態列。活動結束後需重新按開始。
-- Mac 必須保持開機、服務執行且網路可達。
+https://learn.chatgpt.com/docs/auth
+https://learn.chatgpt.com/docs/app-server
+https://github.com/openai/codex/blob/main/codex-rs/login/src/device_code_auth.rs
+https://github.com/openai/codex/blob/main/codex-rs/login/src/auth/manager.rs
+https://github.com/openai/codex/blob/main/codex-rs/backend-client/src/client/rate_limit_resets.rs
 
-## 4. 選配：背景自動更新（APNs）
-
-這條路需要 Apple Developer 帳號中可用的 APNs 金鑰與 App ID，以及含正確 `aps-environment` 權限的簽名／描述檔。**一般免費側載簽名不保證可用，GitHub Actions 編譯成功不代表有推播權限。** 本包未簽署編譯不內嵌憑證或可冒用的權限；正式推播的簽名與描述檔由你自己的簽名流程提供。
-
-先準備 APNs `.p8`，在 Mac 本機終端機設定（不要放進 GitHub repo）：
-
-```sh
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r mac/requirements.txt
-export APNS_TEAM_ID='你的 Apple Team ID'
-export APNS_KEY_ID='你的 APNs Key ID'
-export APNS_KEY_PATH='/你的私人路徑/AuthKey.p8'
-export APNS_BUNDLE_ID='com.example.CodexIsland'
-export APNS_ENV='sandbox'
-python3 mac/bridge.py --host 0.0.0.0
-```
-
-APNS_ENV 依實際描述檔選 sandbox 或 production，不能依 IPA 是 Debug／Release 猜測。簽名後主 App ID 若變更，必須修改 APNS_BUNDLE_ID。金鑰需允許該 App／環境。
-
-iPhone 打開推播開關，先「停止顯示」再「開始顯示」。App 取得 ActivityKit push token 後會 POST 到 `/register`；服務每分鐘取得新資料後以低優先級 APNs 推播。Apple 會依預算與系統狀態調度，不能保證每分鐘顯示。
-
-推播 token 暫存在服務記憶體，服務重開後需重新打開 App；超過 8 小時的登錄會移除。token 輪替時 App 會重新登錄；沒有即時 token 或註冊失敗時，前景更新仍可用。停止活動後 Apple 可能回傳 400／410，服務會移除無效 token。
-
-## 檔案與介面
-
-- `project.yml`：XcodeGen 專案設定；可在 Mac `brew install xcodegen` → `xcodegen generate` → 開啟 `CodexIsland.xcodeproj`。
-- `.github/workflows/build-ipa.yml`：macOS runner 編譯、檢查 extension 並打包 IPA。
-- `ios/App`：連線設定、Keychain、額度讀取、ActivityKit。
-- `ios/Widget`：靈動島及鎖定畫面介面。
-- `ios/Shared`：與 APNs JSON 對應的 ContentState。
-- `mac/bridge.py`：只讀額度及選配推播，標準庫即可跑前景版本。
-- `mac/test_bridge.py`：離線測試，不需帳號或 Apple 憑證。
-
-`GET /quota` 與 `POST /register` 均要求 `Authorization: Bearer <配對金鑰>`。`/quota` 若上游讀取失敗或資料超過 180 秒會回 503，金鑰錯誤回 401。OpenAI 原始認證資訊不會傳送到 iPhone。
-
-## 文件
-
-- https://learn.chatgpt.com/docs/app-server （初始化與 account/rateLimits/read）
-- https://developer.apple.com/documentation/activitykit
-- https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications
-- https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts
+登入使用公開原始碼中的 Codex public OAuth client ID（不是 client secret）。回應碼／格式取自上述實作，但 OpenAI 仍可能拒絕第三方手機客戶端，請勿將此實驗版宣稱為官方支援的整合。

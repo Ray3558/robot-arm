@@ -11,8 +11,10 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Verify bridge
-        run: python3 -m unittest discover -s mac -v
+      - name: Verify quota decoding
+        run: |
+          swiftc ios/Shared/QuotaData.swift tests/QuotaData/main.swift -o /tmp/verify-quota
+          /tmp/verify-quota
       - name: Install project generator
         run: brew install xcodegen
       - name: Generate Xcode project

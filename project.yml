@@ -8,8 +8,8 @@ settings:
     SWIFT_VERSION: '5.0'
     TARGETED_DEVICE_FAMILY: '1'
     CODE_SIGNING_ALLOWED: NO
-    MARKETING_VERSION: '0.1.0'
-    CURRENT_PROJECT_VERSION: '1'
+    MARKETING_VERSION: '0.2.0'
+    CURRENT_PROJECT_VERSION: '2'
 targets:
   CodexIsland:
     type: application
@@ -27,9 +27,9 @@ targets:
         CFBundleDisplayName: Codex Island
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
-        NSLocalNetworkUsageDescription: 讀取你私人網路中的 Codex 額度服務。
-        NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: true
+        UIBackgroundModes: [fetch]
+        BGTaskSchedulerPermittedIdentifiers:
+          - $(PRODUCT_BUNDLE_IDENTIFIER).refresh
     dependencies:
       - target: QuotaWidget
         embed: true
