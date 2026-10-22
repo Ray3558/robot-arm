@@ -1,0 +1,39 @@
+name: Build ARM Link IPA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'arm-link-ios/**'
+      - '.github/workflows/build-arm-link.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate ARM Link project
+        run: xcodegen generate --spec arm-link-ios/project.yml --project arm-link-ios
+      - name: Build iPhone app
+        run: |
+          xcodebuild -project arm-link-ios/ArmLink.xcodeproj -scheme ArmLink \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build-armlink CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p arm-package/Payload
+          cp -R build-armlink/Build/Products/Release-iphoneos/ArmLink.app arm-package/Payload/
+          /usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' arm-package/Payload/ArmLink.app/Info.plist
+          test -x arm-package/Payload/ArmLink.app/ArmLink
+          cd arm-package
+          /usr/bin/zip -qry ../ArmLink-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ArmLink-unsigned-IPA
+          path: ArmLink-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
