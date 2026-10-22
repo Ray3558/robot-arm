@@ -1,0 +1,12 @@
+.DS_Store
+.bridge-token
+.env
+*.p8
+*.p12
+*.mobileprovision
+*.ipa
+__pycache__/
+.venv/
+build/
+package/
+*.xcodeproj/

@@ -1,0 +1,53 @@
+name: CodexIsland
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: '16.2'
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    TARGETED_DEVICE_FAMILY: '1'
+    CODE_SIGNING_ALLOWED: NO
+    MARKETING_VERSION: '0.1.0'
+    CURRENT_PROJECT_VERSION: '1'
+targets:
+  CodexIsland:
+    type: application
+    platform: iOS
+    sources:
+      - ios/App
+      - ios/Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.CodexIsland
+        INFOPLIST_KEY_CFBundleDisplayName: Codex Island
+    info:
+      path: ios/App/Info.plist
+      properties:
+        CFBundleDisplayName: Codex Island
+        UILaunchScreen: {}
+        NSSupportsLiveActivities: true
+        NSLocalNetworkUsageDescription: 讀取你私人網路中的 Codex 額度服務。
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+    dependencies:
+      - target: QuotaWidget
+        embed: true
+    scheme:
+      gatherCoverageData: false
+  QuotaWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ios/Widget
+      - ios/Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.CodexIsland.QuotaWidget
+        SKIP_INSTALL: YES
+    info:
+      path: ios/Widget/Info.plist
+      properties:
+        CFBundleDisplayName: Codex Quota
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension

@@ -1,0 +1,37 @@
+name: Build unsigned IPA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify bridge
+        run: python3 -m unittest discover -s mac -v
+      - name: Install project generator
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build app and embedded Live Activity extension
+        run: |
+          xcodebuild -project CodexIsland.xcodeproj -scheme CodexIsland \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p package/Payload
+          cp -R build/Build/Products/Release-iphoneos/CodexIsland.app package/Payload/
+          test -d package/Payload/CodexIsland.app/PlugIns/QuotaWidget.appex
+          cd package
+          /usr/bin/zip -qry ../CodexIsland-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CodexIsland-unsigned-IPA
+          path: CodexIsland-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
