@@ -156,69 +156,9 @@ struct CodexIslandApp: App {
     @Environment(\.scenePhase) private var phase
     var body: some Scene {
         WindowGroup {
-            NavigationStack {
-                Form {
-                    Section("ChatGPT 帳號") {
-                        Text(model.connected ? "已登入 · OAuth" : "尚未登入")
-                        if !model.signingIn {
-                            Button(model.connected ? "重新登入 ChatGPT" : "登入 ChatGPT") { model.startLogin() }
-                        }
-                        if let device = model.device {
-                            Text(device.code).font(.title.monospaced().bold()).textSelection(.enabled)
-                            Button("複製登入碼") { UIPasteboard.general.string = device.code }
-                            Link("開啟官方授權頁面", destination: URL(string: "https://auth.openai.com/codex/device")!)
-                            Text("在瀏覽器完成授權後切回此 App，會繼續完成登入。只輸入這台手機剛產生的登入碼。")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        if model.signingIn { Button("取消登入", role: .cancel) { model.cancelLogin() } }
-                        if model.connected { Button("登出並清除手機憑證", role: .destructive) { Task { await model.logout() } } }
-                    }
-                    Section("字體顏色") {
-                        ColorPicker("自訂顏色", selection: Binding(
-                            get: { model.textColor },
-                            set: { model.setTextColor($0) }
-                        ), supportsOpacity: false)
-                        HStack {
-                            Text("預覽").foregroundStyle(.white.opacity(0.7))
-                            Spacer()
-                            Text("Codex  75%").font(.headline.monospacedDigit()).foregroundStyle(model.textColor)
-                        }
-                        .padding().background(Color.black, in: RoundedRectangle(cornerRadius: 14))
-                        Text(model.textColorHex).font(.caption.monospaced()).foregroundStyle(.secondary)
-                        Button("恢復預設薄荷綠") { model.setTextColorHex(QuotaAppearance.defaultHex) }
-                        Text("套用到靈動島與鎖定畫面文字，會自動儲存並更新現有即時動態。")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Section("Codex 額度") {
-                        if let p = model.usage?.rateLimit?.primaryWindow {
-                            Text("主視窗剩餘 \(p.remaining)%").font(.title2.bold()).foregroundStyle(model.textColor)
-                            ProgressView(value: Double(p.remaining), total: 100).tint(model.textColor)
-                            Text("重置：\(Date(timeIntervalSince1970: p.resetAt).formatted())").font(.caption)
-                        }
-                        if let s = model.usage?.rateLimit?.secondaryWindow { Text("第二視窗剩餘 \(s.remaining)%") }
-                        if let date = model.updatedAt { Text("最後更新：\(date.formatted())").font(.caption) }
-                        Text(model.status).font(.callout)
-                    }
-                    Section {
-                        Button("開始顯示靈動島") { Task { await model.refresh(start: true) } }.disabled(!model.connected || model.busy)
-                        Button("立即更新") { Task { await model.refresh(start: false) } }.disabled(!model.connected || model.busy)
-                        Button("停止顯示", role: .destructive) { Task { await model.stop() } }
-                        Link("查看官方用量頁面", destination: URL(string: "https://chatgpt.com/codex/settings/usage")!)
-                    }
-                    Section("自動更新") {
-                        Picker("App 開啟時檢查間隔", selection: $model.refreshInterval) {
-                            Text("15 秒").tag(15)
-                            Text("30 秒").tag(30)
-                            Text("60 秒").tag(60)
-                        }
-                        Text("每次檢查後自動更新額度；較短的間隔會增加網路與電池用量。連線失敗時會延後重試。")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Section("更新方式") {
-                        Text("App 在前景時依選定間隔檢查並更新。切回 App 時也會檢查。背景由 iOS 決定是否喚醒，無法保證額度變動時立即更新；資料超過 3 分鐘，小島顯示 —。點小島開啟 App 即可刷新。")
-                        Text("此版為個人用實驗整合，使用 Codex 裝置碼登入；服務介面變更或帳號限制可能導致登入／讀取失敗。憑證只存於這台 iPhone 的 Keychain。")
-                    }.font(.caption).foregroundStyle(.secondary)
-                }.navigationTitle("Codex Island")
+            DashboardView(model: model)
+                .preferredColorScheme(.dark)
+                .tint(model.textColor)
                 .task(id: "\(phase)-\(model.refreshInterval)") {
                     guard phase == .active else { return }
                     while !Task.isCancelled {
@@ -229,7 +169,6 @@ struct CodexIslandApp: App {
                 .onChange(of: phase) { state in
                     if state == .background && model.connected { AppDelegate.schedule() }
                 }
-            }
         }
     }
 }

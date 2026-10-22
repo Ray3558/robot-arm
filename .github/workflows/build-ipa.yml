@@ -37,3 +37,26 @@ jobs:
           path: CodexIsland-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
+      - name: Capture simulator UI preview
+        continue-on-error: true
+        timeout-minutes: 8
+        run: |
+          xcodebuild -project CodexIsland.xcodeproj -scheme CodexIsland \
+            -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath simulator-build CODE_SIGNING_ALLOWED=NO build
+          DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(v["udid"] for k,vs in d["devices"].items() if "iOS" in k for v in vs if "iPhone" in v["name"]))')
+          xcrun simctl boot "$DEVICE_ID" || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          xcrun simctl status_bar "$DEVICE_ID" override --time '9:41' --batteryState charged --batteryLevel 100
+          xcrun simctl install "$DEVICE_ID" simulator-build/Build/Products/Debug-iphonesimulator/CodexIsland.app
+          xcrun simctl launch "$DEVICE_ID" com.example.CodexIsland
+          sleep 5
+          xcrun simctl io "$DEVICE_ID" screenshot UI-home.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: CodexIsland-UI-preview
+          path: UI-home.png
+          if-no-files-found: ignore
+          retention-days: 14
+

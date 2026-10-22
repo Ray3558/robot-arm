@@ -1,6 +1,14 @@
-# Codex Island 0.3 — 自訂字體顏色與自動更新
+# Codex Island 0.4 — 深色儀表板與 App 圖示
 
 iPhone 直接以 ChatGPT / Codex 裝置碼 OAuth 登入，讀取額度並顯示在靈動島。不需要 Mac、橋接伺服器或 OpenAI API Key。最低 iOS 16.2；需要支援靈動島的 iPhone。
+
+## 0.4 介面更新
+
+- 深色儀表板：額度圓環、主／第二視窗卡片、重置時間與靈動島預覽。
+- 獨立設定頁：OAuth 裝置碼登入步驟、六種快速配色、完整 ColorPicker 與 15／30／60 秒更新間隔。
+- 專屬 App Icon：以 imagegen 產生黑色玻璃靈動島與薄荷綠額度環；圖示為 1024×1024 不透明 RGB PNG，直接內嵌 IPA。
+- 未登入時顯示 —，設定頁的 75% 色彩預覽會明確註記為示範。
+- GitHub Actions 在完成 IPA 後額外嘗試擷取模擬器首頁，成功時可於 CodexIsland-UI-preview 下載實際畫面。
 
 ## 下載與安裝
 
@@ -61,4 +69,5 @@ https://github.com/openai/codex/blob/main/codex-rs/login/src/auth/manager.rs
 https://github.com/openai/codex/blob/main/codex-rs/backend-client/src/client/rate_limit_resets.rs
 
 登入使用公開原始碼中的 Codex public OAuth client ID（不是 client secret）。回應碼／格式取自上述實作，但 OpenAI 仍可能拒絕第三方手機客戶端，請勿將此實驗版宣稱為官方支援的整合。
+
 
