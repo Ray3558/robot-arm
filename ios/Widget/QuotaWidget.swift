@@ -45,7 +45,7 @@ struct QuotaWidget: Widget {
         ActivityConfiguration(for: QuotaAttributes.self) { context in
             let color = QuotaAppearance.color(context.state.textColorHex)
             VStack(alignment: .leading, spacing: 12) {
-                Text(context.attributes.label).font(.headline).foregroundStyle(color)
+                Text(context.state.providerName ?? context.attributes.label).font(.headline).foregroundStyle(color)
                 QuotaSummaries(state: context.state, color: color)
                 Text("更新於 \(Date(timeIntervalSince1970: context.state.updatedAt).formatted(date: .omitted, time: .shortened))" +
                     (context.isStale ? " · 上次額度，待更新" : ""))
@@ -55,7 +55,7 @@ struct QuotaWidget: Widget {
             let color = QuotaAppearance.color(context.state.textColorHex)
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Text(context.attributes.label).font(.headline).foregroundStyle(color)
+                    Text(context.state.providerName ?? context.attributes.label).font(.headline).foregroundStyle(color)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     Image(systemName: "chart.pie.fill").font(.headline).foregroundStyle(color)

@@ -12,6 +12,7 @@ struct QuotaAttributes: ActivityAttributes {
         var primaryWindowSeconds: Int? = nil
         var secondaryWindowSeconds: Int? = nil
         var secondaryResetAt: Double? = nil
+        var providerName: String? = nil
     }
     var label: String
 }

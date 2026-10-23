@@ -8,16 +8,19 @@ struct OAuthCredentials: Codable {
     var accountID: String?
 }
 
-enum CredentialStore {
-    static let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-        kSecAttrService as String: "CodexIsland.DirectOAuth", kSecAttrAccount as String: "session"]
-    static func read() -> OAuthCredentials? {
+struct CredentialStore {
+    static let codex = CredentialStore(account: "session")
+    static let claude = CredentialStore(account: "claude-session")
+    let account: String
+    private var query: [String: Any] { [kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: "CodexIsland.DirectOAuth", kSecAttrAccount as String: account] }
+    func read() -> OAuthCredentials? {
         var q = query; q[kSecReturnData as String] = true
         var result: CFTypeRef?
         guard SecItemCopyMatching(q as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { return nil }
         return try? JSONDecoder().decode(OAuthCredentials.self, from: data)
     }
-    static func save(_ credentials: OAuthCredentials) throws {
+    func save(_ credentials: OAuthCredentials) throws {
         let data = try JSONEncoder().encode(credentials)
         let update = [kSecValueData as String: data]
         let result = SecItemUpdate(query as CFDictionary, update as CFDictionary)
@@ -28,7 +31,7 @@ enum CredentialStore {
             guard SecItemAdd(q as CFDictionary, nil) == errSecSuccess else { throw QuotaError.message("無法安全儲存登入資料。") }
         } else if result != errSecSuccess { throw QuotaError.message("無法更新安全儲存的登入資料。") }
     }
-    static func clear() { SecItemDelete(query as CFDictionary) }
+    func clear() { SecItemDelete(query as CFDictionary) }
 }
 
 struct DeviceAuthorization {
@@ -48,7 +51,7 @@ struct TokenResponse: Decodable {
 actor DirectOAuth {
     static let shared = DirectOAuth()
     static let clientID = "app_EMoamEEZ73f0CkXaXp7hrann"
-    private var credentials = CredentialStore.read()
+    private var credentials = CredentialStore.codex.read()
     private var renewal: Task<OAuthCredentials, Error>?
     private var generation = UUID()
     private let session: URLSession = {
@@ -95,7 +98,7 @@ actor DirectOAuth {
         try Task.checkCancellation()
         guard stamp == generation else { throw CancellationError() }
         let c = makeCredentials(t, previous: nil)
-        try CredentialStore.save(c); credentials = c
+        try CredentialStore.codex.save(c); credentials = c
         return true
     }
     private func exchange(_ fields: [String: String]) async throws -> TokenResponse {
@@ -138,7 +141,7 @@ actor DirectOAuth {
         defer { renewal = nil }
         let c = try await mapped.value
         guard stamp == generation else { throw CancellationError() }
-        try CredentialStore.save(c); credentials = c
+        try CredentialStore.codex.save(c); credentials = c
         return c
     }
     func usage() async throws -> DirectUsage {
@@ -157,6 +160,6 @@ actor DirectOAuth {
     }
     func signOut() {
         generation = UUID(); renewal?.cancel(); renewal = nil
-        credentials = nil; CredentialStore.clear()
+        credentials = nil; CredentialStore.codex.clear()
     }
 }

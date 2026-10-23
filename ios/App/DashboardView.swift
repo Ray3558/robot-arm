@@ -33,7 +33,6 @@ struct DashboardView: View {
     @State private var islandActive = !Activity<QuotaAttributes>.activities.isEmpty
     @Environment(\.scenePhase) private var phase
     private var primary: UsageWindow? { model.usage?.rateLimit?.primaryWindow }
-    private var secondary: UsageWindow? { model.usage?.rateLimit?.secondaryWindow }
     private var isStale: Bool { model.updatedAt.map { Date().timeIntervalSince($0) > 180 } ?? true }
 
     var body: some View {
@@ -43,6 +42,7 @@ struct DashboardView: View {
                     header
                     quotaHero
                     windowCards
+                    claudeCards
                     islandPreview
                     actions
                     statusCard
@@ -56,10 +56,11 @@ struct DashboardView: View {
             }
             .background(Surface.background)
             .toolbar(.hidden, for: .navigationBar)
-            .refreshable { if model.connected { await model.refresh(start: false) } }
+            .refreshable { if model.hasAccount { await model.refresh(start: false, manual: true) } }
             .sheet(isPresented: $showSettings) { IslandSettingsView(model: model) }
             .onChange(of: phase) { _ in updateActivityState() }
             .onChange(of: model.updatedAt) { _ in updateActivityState() }
+            .onChange(of: model.claudeUpdatedAt) { _ in updateActivityState() }
         }
     }
 
@@ -126,9 +127,30 @@ struct DashboardView: View {
     }
 
     private var windowCards: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
-            WindowCard(title: QuotaWindowText.title(primary?.limitWindowSeconds, fallback: "短期額度"), window: primary, color: model.textColor, symbol: "clock")
-            WindowCard(title: QuotaWindowText.title(secondary?.limitWindowSeconds, fallback: "長期額度"), window: secondary, color: model.textColor, symbol: "calendar")
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Codex").font(.system(size: 15, weight: .semibold))
+            WindowCards(limits: model.usage?.rateLimit, color: model.textColor)
+        }
+    }
+
+    private var claudeCards: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Claude").font(.system(size: 15, weight: .semibold))
+                Spacer()
+                if let claudeUpdatedAt = model.claudeUpdatedAt {
+                    Text("更新於 " + claudeUpdatedAt.formatted(date: .omitted, time: .shortened))
+                        .font(.system(size: 11)).foregroundStyle(Surface.muted)
+                }
+            }
+            if model.claudeConnected {
+                WindowCards(limits: model.claudeUsage, color: model.textColor)
+            } else {
+                Button { showSettings = true; model.startClaudeLogin() } label: {
+                    Label("登入 Claude 查看用量", systemImage: "person.crop.circle.badge.plus")
+                        .font(.system(size: 14, weight: .medium)).frame(maxWidth: .infinity).padding(.vertical, 6)
+                }.islandCard()
+            }
         }
     }
 
@@ -140,15 +162,18 @@ struct DashboardView: View {
                 Text("顯示預覽").font(.system(size: 11)).foregroundStyle(Surface.muted)
             }
             TimelineView(.periodic(from: .now, by: 30)) { context in
-                let stale = model.updatedAt.map { context.date.timeIntervalSince($0) > 180 } ?? true
+                let snapshot = model.islandSnapshot
+                let remaining = snapshot?.limits.primaryWindow?.remaining
+                let stale = snapshot.map { context.date.timeIntervalSince($0.updatedAt) > $0.provider.staleAfter } ?? true
                 HStack {
-                    QuotaPieChart(remaining: primary?.remaining, color: model.textColor)
+                    QuotaPieChart(remaining: remaining, color: model.textColor)
                         .frame(width: 24, height: 24)
+                    Text(model.islandProvider.name).font(.system(size: 13, weight: .medium))
                     Spacer()
-                    if stale && primary != nil {
+                    if stale && remaining != nil {
                         Text("待更新").font(.caption2).foregroundStyle(.orange)
                     }
-                    Text(primary.map { "\($0.remaining)%" } ?? "—")
+                    Text(remaining.map { "\($0)%" } ?? "—")
                         .font(.system(size: 18, weight: .semibold, design: .rounded)).monospacedDigit()
                 }
                 .foregroundStyle(model.textColor).padding(.horizontal, 23).frame(height: 56)
@@ -167,7 +192,7 @@ struct DashboardView: View {
 
     private var actions: some View {
         VStack(spacing: 12) {
-            if model.connected {
+            if model.hasAccount {
                 Button {
                     Task {
                         if islandActive { await model.stop() }
@@ -177,7 +202,7 @@ struct DashboardView: View {
                 } label: {
                     Label(islandActive ? "停止靈動島顯示" : "開啟靈動島", systemImage: islandActive ? "stop.circle" : "play.circle")
                 }.buttonStyle(PrimaryButton(color: model.textColor)).disabled(model.busy)
-                Button { Task { await model.refresh(start: false) } } label: {
+                Button { Task { await model.refresh(start: false, manual: true) } } label: {
                     Label(model.busy ? "正在更新" : "立即更新額度", systemImage: "arrow.clockwise")
                         .font(.system(size: 14, weight: .medium)).frame(maxWidth: .infinity).padding(.vertical, 10)
                 }.disabled(model.busy)
@@ -204,6 +229,19 @@ struct DashboardView: View {
     private func updateActivityState() { islandActive = !Activity<QuotaAttributes>.activities.isEmpty }
 }
 
+private struct WindowCards: View {
+    let limits: UsageLimits?
+    let color: Color
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
+            WindowCard(title: QuotaWindowText.title(limits?.primaryWindow?.limitWindowSeconds, fallback: "短期額度"),
+                       window: limits?.primaryWindow, color: color, symbol: "clock")
+            WindowCard(title: QuotaWindowText.title(limits?.secondaryWindow?.limitWindowSeconds, fallback: "長期額度"),
+                       window: limits?.secondaryWindow, color: color, symbol: "calendar")
+        }
+    }
+}
+
 private struct WindowCard: View {
     let title: String
     let window: UsageWindow?
@@ -216,7 +254,7 @@ private struct WindowCard: View {
                 .font(.system(size: 27, weight: .semibold, design: .rounded)).monospacedDigit().foregroundStyle(color)
             if let window {
                 Text("剩餘額度").font(.system(size: 10)).foregroundStyle(Surface.muted)
-                Text(QuotaWindowText.reset(window.resetAt))
+                Text(window.resetAt > 0 ? QuotaWindowText.reset(window.resetAt) : "尚未開始計時")
                     .font(.system(size: 11)).foregroundStyle(.white.opacity(0.75))
             } else {
                 Text("尚無可用資料").font(.system(size: 11)).foregroundStyle(Surface.muted)
@@ -230,6 +268,7 @@ private struct IslandSettingsView: View {
     @ObservedObject var model: Model
     @Environment(\.dismiss) private var dismiss
     @State private var copiedCode = false
+    @State private var claudeCode = ""
     private let swatches = ["#63E6BE", "#FFFFFF", "#77B5FF", "#B69CFF", "#FF94C2", "#FFC66D"]
     var body: some View {
         NavigationStack {
@@ -266,7 +305,46 @@ private struct IslandSettingsView: View {
                     }
                     if model.signingIn { Button("取消登入", role: .cancel) { model.cancelLogin() } }
                     if model.connected { Button("登出這台 iPhone", role: .destructive) { Task { await model.logout() } } }
-                } header: { Text("帳號") } footer: { Text(model.status) }
+                } header: { Text("Codex 帳號") } footer: { Text(model.status) }
+
+                Section {
+                    HStack(spacing: 13) {
+                        Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(model.textColor)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Claude 帳號").font(.headline)
+                            Text(model.claudeConnected ? "OAuth 已連線" : "登入以查看 Claude 用量").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }.padding(.vertical, 5)
+                    if let request = model.claudeLogin {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("1  在官方頁面授權").font(.caption).foregroundStyle(.secondary)
+                            Link(destination: request.url) {
+                                Label("開啟 Claude 授權頁面", systemImage: "arrow.up.right.square")
+                            }
+                            Divider()
+                            Text("2  貼上授權後頁面顯示的代碼").font(.caption).foregroundStyle(.secondary)
+                            TextField("貼上代碼", text: $claudeCode)
+                                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                                .font(.system(.body, design: .monospaced))
+                            Button(model.claudeSigningIn ? "正在登入…" : "完成登入") { model.finishClaudeLogin(claudeCode) }
+                                .disabled(claudeCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.claudeSigningIn)
+                        }.padding(.vertical, 8)
+                        Button("取消登入", role: .cancel) { model.cancelClaudeLogin() }
+                    } else {
+                        Button(model.claudeConnected ? "重新登入 Claude" : "登入 Claude") { model.startClaudeLogin() }
+                    }
+                    if model.claudeConnected {
+                        Button("登出 Claude", role: .destructive) { Task { await model.claudeLogout() } }
+                    }
+                } header: { Text("Claude 帳號") } footer: { Text(model.claudeStatus) }
+
+                Section {
+                    Picker("靈動島顯示", selection: $model.islandProvider) {
+                        ForEach(IslandProvider.allCases, id: \.self) { Text($0.name).tag($0) }
+                    }.pickerStyle(.segmented)
+                } header: { Text("靈動島來源") } footer: {
+                    Text("靈動島與鎖定畫面一次顯示一家。Claude 用量介面限流嚴格，約每 10 分鐘更新一次。")
+                }
 
                 Section {
                     ColorPicker("自訂字體顏色", selection: Binding(get: { model.textColor }, set: { model.setTextColor($0) }), supportsOpacity: false)
@@ -305,18 +383,22 @@ private struct IslandSettingsView: View {
 
                 Section {
                     Link(destination: URL(string: "https://chatgpt.com/codex/settings/usage")!) {
-                        Label("查看官方用量頁面", systemImage: "safari")
+                        Label("查看 Codex 官方用量頁面", systemImage: "safari")
                     }
-                    HStack { Text("版本"); Spacer(); Text("0.5.2").foregroundStyle(.secondary) }
+                    Link(destination: URL(string: "https://claude.ai/settings/usage")!) {
+                        Label("查看 Claude 官方用量頁面", systemImage: "safari")
+                    }
+                    HStack { Text("版本"); Spacer(); Text("0.6.0").foregroundStyle(.secondary) }
                     Label("憑證僅儲存於本機 Keychain", systemImage: "lock.shield")
                 } header: { Text("關於") } footer: {
-                    Text("個人用實驗整合。Codex 服務介面或帳號限制可能影響登入及用量讀取。")
+                    Text("個人用實驗整合。Codex 與 Claude 的登入及用量介面皆非公開 API，服務變更或帳號限制都可能影響登入及用量讀取。")
                 }
             }
             .scrollContentBackground(.hidden).background(Surface.background)
             .navigationTitle("設定").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
             .onChange(of: model.device?.code) { _ in copiedCode = false }
+            .onChange(of: model.claudeLogin?.state) { _ in claudeCode = "" }
         }.preferredColorScheme(.dark).tint(model.textColor)
     }
 }

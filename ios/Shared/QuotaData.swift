@@ -60,3 +60,33 @@ enum QuotaWindowText {
         return formatter.string(from: date) + " 重置"
     }
 }
+
+/// Response of Claude's undocumented `/api/oauth/usage`: utilization is a 0–100 percentage.
+struct ClaudeUsage: Decodable {
+    struct Window: Decodable {
+        let utilization: Double?
+        let resetsAt: String?
+        enum CodingKeys: String, CodingKey { case utilization, resetsAt = "resets_at" }
+    }
+    let fiveHour: Window?
+    let sevenDay: Window?
+    enum CodingKeys: String, CodingKey { case fiveHour = "five_hour", sevenDay = "seven_day" }
+
+    func limits() throws -> UsageLimits {
+        guard let primary = Self.window(fiveHour, seconds: 18_000) else {
+            throw QuotaError.message("此帳號沒有可讀取的 Claude 用量，或伺服器格式已變更。")
+        }
+        return UsageLimits(primaryWindow: primary, secondaryWindow: Self.window(sevenDay, seconds: 604_800))
+    }
+    /// A window with no reset time yet (nothing used) gets resetAt 0.
+    private static func window(_ window: Window?, seconds: Int) -> UsageWindow? {
+        guard let window, let used = window.utilization, used.isFinite else { return nil }
+        return UsageWindow(usedPercent: min(100, max(0, used)), limitWindowSeconds: seconds,
+                           resetAt: window.resetsAt.flatMap(parseDate) ?? 0)
+    }
+    static func parseDate(_ text: String) -> Double? {
+        // Drop fractional seconds; their digit count varies and the formatter is strict about it.
+        let trimmed = text.replacingOccurrences(of: #"\.\d+"#, with: "", options: .regularExpression)
+        return ISO8601DateFormatter().date(from: trimmed)?.timeIntervalSince1970
+    }
+}
