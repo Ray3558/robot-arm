@@ -12,4 +12,8 @@ for invalid in ["{}", "{\"rate_limit\":null}", String(data: fixture, encoding: .
         fatalError("Invalid quota was accepted")
     } catch { }
 }
+precondition(QuotaWindowText.title(18000, fallback: "") == "5 小時額度")
+precondition(QuotaWindowText.title(604800, fallback: "") == "每週額度")
+precondition(QuotaWindowText.title(nil, fallback: "長期額度") == "長期額度")
+precondition(QuotaWindowText.reset(1900000000, now: Date(timeIntervalSince1970: 1899990000)).hasSuffix(" 重置"))
 print("Quota decoding: primary, null secondary, unavailable and invalid ranges passed")

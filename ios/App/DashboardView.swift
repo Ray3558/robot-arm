@@ -109,13 +109,13 @@ struct DashboardView: View {
                     } else {
                         Text("—").font(.system(size: 64, weight: .medium, design: .rounded)).foregroundStyle(Surface.muted)
                     }
-                    Text(primary == nil ? "登入後查看額度" : "主視窗可用比例")
+                    Text(primary.map { QuotaWindowText.title($0.limitWindowSeconds, fallback: "短期額度") + "剩餘" } ?? "登入後查看額度")
                         .font(.system(size: 12)).foregroundStyle(Surface.muted)
                 }
             }
             .frame(width: 210, height: 210)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(primary.map { "主視窗剩餘 \($0.remaining) 百分比" } ?? "尚未取得額度")
+            .accessibilityLabel(primary.map { QuotaWindowText.title($0.limitWindowSeconds, fallback: "短期額度") + "剩餘 \($0.remaining) 百分比" } ?? "尚未取得額度")
             HStack(spacing: 7) {
                 if model.busy { ProgressView().controlSize(.mini).tint(model.textColor) }
                 else { Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10)) }
@@ -127,8 +127,8 @@ struct DashboardView: View {
 
     private var windowCards: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
-            WindowCard(title: "主視窗", window: primary, color: model.textColor, symbol: "clock")
-            WindowCard(title: "第二視窗", window: secondary, color: model.textColor, symbol: "calendar")
+            WindowCard(title: QuotaWindowText.title(primary?.limitWindowSeconds, fallback: "短期額度"), window: primary, color: model.textColor, symbol: "clock")
+            WindowCard(title: QuotaWindowText.title(secondary?.limitWindowSeconds, fallback: "長期額度"), window: secondary, color: model.textColor, symbol: "calendar")
         }
     }
 
@@ -215,21 +215,14 @@ private struct WindowCard: View {
             Text(window.map { "\($0.remaining)%" } ?? "—")
                 .font(.system(size: 27, weight: .semibold, design: .rounded)).monospacedDigit().foregroundStyle(color)
             if let window {
-                Text(period(window.limitWindowSeconds)).font(.system(size: 10)).foregroundStyle(Surface.muted)
-                Text(Date(timeIntervalSince1970: window.resetAt), format: .dateTime.month().day().hour().minute())
+                Text("剩餘額度").font(.system(size: 10)).foregroundStyle(Surface.muted)
+                Text(QuotaWindowText.reset(window.resetAt))
                     .font(.system(size: 11)).foregroundStyle(.white.opacity(0.75))
-                Text("重置時間").font(.system(size: 9)).foregroundStyle(Surface.muted)
             } else {
                 Text("尚無可用資料").font(.system(size: 11)).foregroundStyle(Surface.muted)
-                Text("—").font(.system(size: 11)).foregroundStyle(Surface.muted)
-                Text("等待帳號回傳").font(.system(size: 9)).foregroundStyle(Surface.muted)
+                Text("等待帳號回傳").font(.system(size: 11)).foregroundStyle(Surface.muted)
             }
         }.frame(maxWidth: .infinity, alignment: .leading).islandCard()
-    }
-    private func period(_ seconds: Int) -> String {
-        if seconds >= 86400 && seconds % 86400 == 0 { return "\(seconds / 86400) 天視窗" }
-        if seconds >= 3600 && seconds % 3600 == 0 { return "\(seconds / 3600) 小時視窗" }
-        return "\(max(1, seconds / 60)) 分鐘視窗"
     }
 }
 
@@ -314,7 +307,7 @@ private struct IslandSettingsView: View {
                     Link(destination: URL(string: "https://chatgpt.com/codex/settings/usage")!) {
                         Label("查看官方用量頁面", systemImage: "safari")
                     }
-                    HStack { Text("版本"); Spacer(); Text("0.5.1").foregroundStyle(.secondary) }
+                    HStack { Text("版本"); Spacer(); Text("0.5.2").foregroundStyle(.secondary) }
                     Label("憑證僅儲存於本機 Keychain", systemImage: "lock.shield")
                 } header: { Text("關於") } footer: {
                     Text("個人用實驗整合。Codex 服務介面或帳號限制可能影響登入及用量讀取。")
