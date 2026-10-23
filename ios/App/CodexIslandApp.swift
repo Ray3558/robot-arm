@@ -111,9 +111,12 @@ final class Model: ObservableObject {
             consecutiveFailures = 0; retryNotBefore = .distantPast
             usage = result; updatedAt = Date(); connected = true
             guard let primary = result.rateLimit?.primaryWindow else { return }
+            let secondary = result.rateLimit?.secondaryWindow
             let state = QuotaAttributes.ContentState(remaining: primary.remaining,
-                secondaryRemaining: result.rateLimit?.secondaryWindow?.remaining,
-                resetAt: primary.resetAt, updatedAt: Date().timeIntervalSince1970, textColorHex: textColorHex)
+                secondaryRemaining: secondary?.remaining,
+                resetAt: primary.resetAt, updatedAt: Date().timeIntervalSince1970, textColorHex: textColorHex,
+                primaryWindowSeconds: primary.limitWindowSeconds,
+                secondaryWindowSeconds: secondary?.limitWindowSeconds, secondaryResetAt: secondary?.resetAt)
             let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(180))
             var activities = Activity<QuotaAttributes>.activities.filter {
                 $0.activityState == .active || $0.activityState == .stale

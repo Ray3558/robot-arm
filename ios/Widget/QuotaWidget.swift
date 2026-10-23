@@ -5,17 +5,38 @@ import WidgetKit
 private struct PieSummary: View {
     let title: String
     let remaining: Int?
+    let resetAt: Double?
     let color: Color
     var body: some View {
         HStack(spacing: 10) {
             QuotaPieChart(remaining: remaining, color: color).frame(width: 44, height: 44)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.caption).foregroundStyle(color.opacity(0.8))
-                Text(remaining.map { "\($0)%" } ?? "—")
-                    .font(.system(size: 22, weight: .semibold, design: .rounded)).monospacedDigit()
-                    .foregroundStyle(color)
-            }
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(remaining.map { "\($0)%" } ?? "—")
+                        .font(.system(size: 22, weight: .semibold, design: .rounded)).monospacedDigit()
+                    Text("剩餘").font(.caption2)
+                }.foregroundStyle(color)
+                if let resetAt {
+                    Text(QuotaWindowText.reset(resetAt)).font(.caption2).foregroundStyle(color.opacity(0.7))
+                }
+            }.lineLimit(1).minimumScaleFactor(0.8)
         }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct QuotaSummaries: View {
+    let state: QuotaAttributes.ContentState
+    let color: Color
+    var body: some View {
+        HStack(spacing: 16) {
+            PieSummary(title: QuotaWindowText.title(state.primaryWindowSeconds, fallback: "短期額度"),
+                       remaining: state.remaining, resetAt: state.resetAt, color: color)
+            if let secondary = state.secondaryRemaining {
+                PieSummary(title: QuotaWindowText.title(state.secondaryWindowSeconds, fallback: "長期額度"),
+                           remaining: secondary, resetAt: state.secondaryResetAt, color: color)
+            }
+        }
     }
 }
 
@@ -25,12 +46,7 @@ struct QuotaWidget: Widget {
             let color = QuotaAppearance.color(context.state.textColorHex)
             VStack(alignment: .leading, spacing: 12) {
                 Text(context.attributes.label).font(.headline).foregroundStyle(color)
-                HStack(spacing: 16) {
-                    PieSummary(title: "主視窗", remaining: context.state.remaining, color: color)
-                    if let secondary = context.state.secondaryRemaining {
-                        PieSummary(title: "第二視窗", remaining: secondary, color: color)
-                    }
-                }
+                QuotaSummaries(state: context.state, color: color)
                 Text("更新於 \(Date(timeIntervalSince1970: context.state.updatedAt).formatted(date: .omitted, time: .shortened))" +
                     (context.isStale ? " · 上次額度，待更新" : ""))
                     .font(.caption).foregroundStyle(color.opacity(0.8))
@@ -46,22 +62,14 @@ struct QuotaWidget: Widget {
                         .accessibilityHidden(true)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(spacing: 16) {
-                            PieSummary(title: "主視窗", remaining: context.state.remaining, color: color)
-                            if let secondary = context.state.secondaryRemaining {
-                                PieSummary(title: "第二視窗", remaining: secondary, color: color)
-                            }
+                    VStack(alignment: .leading, spacing: 10) {
+                        QuotaSummaries(state: context.state, color: color)
+                        if context.isStale {
+                            Text("上次額度 · 待更新 · 點此開啟 App")
+                                .font(.caption2).foregroundStyle(color.opacity(0.7))
+                                .frame(maxWidth: .infinity)
                         }
-                        if let reset = context.state.resetAt {
-                            HStack(spacing: 4) {
-                                Text("主視窗重置")
-                                Text(Date(timeIntervalSince1970: reset), format: .dateTime.month().day().hour().minute())
-                            }.font(.caption2).foregroundStyle(color.opacity(0.8)).lineLimit(2)
-                        }
-                        Text(context.isStale ? "上次額度 · 待更新 · 點此開啟 App" : "彩色代表剩餘 · 點此更新")
-                            .font(.caption2).foregroundStyle(color.opacity(0.7))
-                    }.padding(.top, 4)
+                    }.padding(.top, 4).padding(.horizontal, 8)
                 }
             } compactLeading: {
                 QuotaPieChart(remaining: context.state.remaining, color: color)
