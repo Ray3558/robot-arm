@@ -63,6 +63,8 @@ final class Model: ObservableObject {
         islandEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: "islandEnabled")
     }
+    private static let transientLoginErrors: Set<URLError.Code> = [.cancelled, .networkConnectionLost,
+        .notConnectedToInternet, .timedOut, .cannotConnectToHost, .dnsLookupFailed]
     func startLogin() {
         guard !signingIn else { return }
         signingIn = true
@@ -75,16 +77,21 @@ final class Model: ObservableObject {
                 status = "複製登入碼，在官方頁面授權後回到此 App。"
                 while Date() < authorization.expiresAt {
                     try Task.checkCancellation()
-                    if try await DirectOAuth.shared.poll(authorization) {
-                        connected = true; consecutiveFailures = 0; retryNotBefore = .distantPast; status = "登入成功。"
-                        await refresh(start: false)
-                        return
+                    do {
+                        if try await DirectOAuth.shared.poll(authorization) {
+                            connected = true; consecutiveFailures = 0; retryNotBefore = .distantPast; status = "登入成功。"
+                            await refresh(start: false)
+                            return
+                        }
+                    } catch let error as URLError where !Task.isCancelled && Self.transientLoginErrors.contains(error.code) {
+                        // iOS drops in-flight requests (URLError.cancelled) while the user is in Safari
+                        // authorizing the code; keep polling instead of abandoning the login.
                     }
                     try await Task.sleep(for: .seconds(authorization.interval))
                 }
                 status = "登入碼已過期，請重新登入。"
             } catch is CancellationError { status = "已取消登入。" }
-            catch { status = error.localizedDescription }
+            catch { status = Task.isCancelled ? "已取消登入。" : error.localizedDescription }
         }
     }
     func cancelLogin() { loginTask?.cancel() }
